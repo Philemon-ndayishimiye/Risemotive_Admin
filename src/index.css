@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+@theme {
+  --font-family-poppins: "Poppins", sans-serif;
+  --font-family-playfair: "Playfair Display", serif;
+}
+
+@keyframes handBounce {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(20px);
+  } /* move forward */
+}
+
+.hand-bounce {
+  animation: handBounce 2.5s ease-in-out infinite;
+}
+
+
+.bubble {
+  position: absolute;
+  border-radius: 50%;
+  background-color: #1E3A8A; /* your blue color */
+  opacity: 0.6;
+  animation: floatUp 8s linear infinite;
+}
+
+@keyframes floatUp {
+  0% {
+    transform: translateY(100vh) scale(0.5);
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(-50vh) scale(1);
+    opacity: 0;
+  }
+}
