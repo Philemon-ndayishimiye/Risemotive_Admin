@@ -1,16 +1,19 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { Camera } from "lucide-react";
 import {
   useGetProfileQuery,
   useUpdateProfileMutation,
+  useChangePasswordMutation,
   useLogoutMutation,
+  useUpdateProfilePictureMutation,
 } from "../../app/api/Auth/auth";
 import { User, Lock, LogOut, Save, Shield, CheckCircle, X } from "lucide-react";
 
-interface ApiError {
-  status: number;
-  data: { message?: string };
-}
+// interface ApiError {
+//   status: number;
+//   data: { message?: string };
+// }
 
 // ── Section Card ───────────────────────────────────────────────────────────
 
@@ -178,11 +181,15 @@ export default function Settings() {
   const { data: profile, isLoading } = useGetProfileQuery();
   const [updateProfile, { isLoading: isUpdating }] = useUpdateProfileMutation();
   const [logoutMutation] = useLogoutMutation();
+  const [changePassword] = useChangePasswordMutation();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [updateProfilePicture] = useUpdateProfilePictureMutation();
+
   const [confirmPassword, setConfirmPassword] = useState("");
   const [toast, setToast] = useState<{
     message: string;
@@ -199,6 +206,49 @@ export default function Settings() {
   const showToast = (message: string, type: "success" | "error") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
+  };
+
+  type ApiError = {
+    status?: number;
+    data?: {
+      message?: string;
+    };
+  };
+
+  const handleProfilePicture = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    console.log(" File input triggered");
+
+    const file = e.target.files?.[0];
+
+    if (!file) {
+      console.warn(" No file selected");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("profilePicture", file);
+
+    // Debug FormData (important!)
+    for (const [key, value] of formData.entries()) {
+      console.log(` FormData -> ${key}:`, value);
+    }
+
+    try {
+      console.log(" Sending request...");
+
+      const response = await updateProfilePicture(formData).unwrap();
+      const profile = response.profilePicture;
+      console.log(profile)
+    
+
+      showToast("Profile picture updated!", "success");
+    } catch (error) {
+      const err = error as ApiError;
+
+      showToast(err.data?.message || "Failed to update picture.", "error");
+    }
   };
 
   const handleUpdateProfile = async () => {
@@ -220,34 +270,43 @@ export default function Settings() {
       showToast("All password fields are required.", "error");
       return;
     }
+
     if (newPassword !== confirmPassword) {
       showToast("New passwords do not match.", "error");
       return;
     }
+
     if (newPassword.length < 6) {
       showToast("Password must be at least 6 characters.", "error");
       return;
     }
+
     try {
-      await updateProfile({ password: newPassword }).unwrap();
+      await changePassword({
+        currentPassword,
+        newPassword,
+      }).unwrap();
+
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+
       showToast("Password updated successfully!", "success");
     } catch (err: unknown) {
       const error = err as ApiError;
       showToast(error?.data?.message ?? "Failed to update password.", "error");
     }
   };
-
   const handleLogout = async () => {
+    setIsLoggingOut(true);
     try {
       await logoutMutation().unwrap();
     } catch {
       // ignore logout errors
     } finally {
       localStorage.removeItem("token");
-      navigate("/login");
+      navigate("/");
+      setIsLoggingOut(false);
     }
   };
 
@@ -280,16 +339,76 @@ export default function Settings() {
       )}
 
       {/* Page Header */}
-      <div className="mb-8">
+      <div className="mb-8 mt-3">
         <h1 className="font-family-playfair font-bold text-[#1E3A8A] text-[22px]">
           Settings
         </h1>
         <p className="font-family-playfair text-gray-500 text-[13px] mt-1">
           Manage your account and preferences
         </p>
+       <div className="flex items-center mt-2 ml-[30%]">
+        <div
+        style={{
+          position: "relative",
+          display: "inline-block",
+        }}
+      >
+        <div
+          style={{
+            width: "100px",
+            height: "100px",
+            borderRadius: "50%",
+            background: "#1E3A8A",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            overflow: "hidden",
+            flexShrink: 0,
+          }}
+        >
+          {profile?.profilePicture ? (
+            <img
+              src={profile.profilePicture}
+              alt="avatar"
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            <span style={{ fontSize: "24px", fontWeight: 700, color: "#fff" }}>
+              {profile?.fullName?.charAt(0).toUpperCase() ?? "A"}
+            </span>
+          )}
+        </div>
+        <label
+          style={{
+            position: "absolute",
+            bottom: 0,
+            right: 0,
+            width: "22px",
+            height: "22px",
+            borderRadius: "50%",
+            background: "#fff",
+            border: "1px solid #BFDBFE",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+          }}
+        >
+          <Camera size={12} color="#1E3A8A" />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleProfilePicture}
+            style={{ display: "none" }}
+          />
+        </label>
+      </div>
+      </div>
       </div>
 
       {/* Account Info */}
+      {/* Profile Picture */}
+      
       <SectionCard
         title="Account Information"
         icon={<User size={16} color="#1E3A8A" />}
@@ -539,8 +658,26 @@ export default function Settings() {
             cursor: "pointer",
           }}
         >
-          <LogOut size={14} />
-          Log Out
+          {isLoggingOut ? (
+            <>
+              <span
+                style={{
+                  width: "14px",
+                  height: "14px",
+                  border: "2px solid #B91C1C",
+                  borderTop: "2px solid transparent",
+                  borderRadius: "50%",
+                  animation: "spin 0.8s linear infinite",
+                }}
+              />
+              Logging out...
+            </>
+          ) : (
+            <>
+              <LogOut size={14} />
+              Log Out
+            </>
+          )}
         </button>
       </SectionCard>
     </div>

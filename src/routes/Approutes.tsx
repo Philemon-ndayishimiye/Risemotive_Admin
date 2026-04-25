@@ -23,7 +23,7 @@ const AppRouter = () => {
       <Routes>
         {/* All routes inside RootLayout get Navbar + Footer */}
         <Route element={<RootLayout />}>
-          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<Login />} />
         </Route>
 
         <Route path="/admin" element={<AdminLayout />}>

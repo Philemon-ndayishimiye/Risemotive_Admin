@@ -1,14 +1,15 @@
-import philemon from "../../assets/komvuga ndayishimiye philemon.jpg";
+//import philemon from "../../assets/komvuga ndayishimiye philemon.jpg";
 import { Settings, LogOut, User, Bell } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useLogoutMutation } from "../../app/api/Auth/auth";
+import { useLogoutMutation, useGetProfileQuery } from "../../app/api/Auth/auth";
 
 export default function AdminHeader() {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [logoutMutation] = useLogoutMutation();
   const navigate = useNavigate();
+  const { data: profile } = useGetProfileQuery();
 
   // Close when clicking outside
   useEffect(() => {
@@ -40,7 +41,7 @@ export default function AdminHeader() {
     <div className="pt-3 flex items-center gap-2 pr-2">
       {/* Welcome */}
       <h2 className="font-semibold font-family-playfair text-gray-700 text-[16px]">
-        Welcome, Philemon
+        Welcome, {profile?.fullName || "Admin"}
       </h2>
 
       {/* Right Side */}
@@ -56,11 +57,34 @@ export default function AdminHeader() {
         {/* 👤 Profile Dropdown */}
         <div className="relative" ref={dropdownRef}>
           {/* Avatar */}
-          <img
-            src={philemon}
+          {/* Avatar */}
+          <div
             onClick={() => setOpen(!open)}
-            className="w-8 h-8 rounded-full cursor-pointer"
-          />
+            className="w-8 h-8 rounded-full cursor-pointer overflow-hidden"
+            style={{
+              background: "#1E3A8A",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {profile?.profilePicture ? (
+              <img
+                src={profile.profilePicture}
+                alt="avatar"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                }}
+              />
+            ) : (
+              <span
+                style={{ color: "#fff", fontSize: "13px", fontWeight: 700 }}
+              >
+                {profile?.fullName?.charAt(0).toUpperCase() ?? "A"}
+              </span>
+            )}
+          </div>
 
           {/* Dropdown */}
           {open && (

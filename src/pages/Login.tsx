@@ -1,4 +1,4 @@
-import { Button, Input } from "@/components/ui/InputAndButton";
+import { Input } from "@/components/ui/InputAndButton";
 import { FaHandPointRight } from "react-icons/fa";
 import { Lock } from "lucide-react";
 import { useState } from "react";
@@ -15,7 +15,8 @@ interface ApiError {
 
 export default function Login() {
   const navigate = useNavigate();
-  const [login, { isLoading }] = useLoginMutation();
+  const [login] = useLoginMutation();
+  const [isLoggin, setIsLoggin] = useState(false);
 
   const [form, setForm] = useState<LoginFormState>({ email: "", password: "" });
   const [errors, setErrors] = useState<LoginErrors>({});
@@ -47,6 +48,7 @@ export default function Login() {
 
   const handleSubmit = async () => {
     if (!validate()) return;
+    setIsLoggin(true);
     try {
       const result = await login({
         email: form.email,
@@ -54,6 +56,7 @@ export default function Login() {
       }).unwrap();
       localStorage.setItem("token", result.token);
       navigate("/admin/dashboard");
+      setIsLoggin(false);
     } catch (err: unknown) {
       const error = err as ApiError;
       setErrors({
@@ -122,11 +125,48 @@ export default function Login() {
             placeholder="••••••••"
           />
           <div className="pt-5" />
-          <Button
-            label={isLoading ? "Logging in..." : "Login"}
+          <button
             onClick={handleSubmit}
-            disabled={isLoading}
-          />
+            disabled={isLoggin}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center", // ✅ centers content
+              gap: "8px",
+
+              width: "100%", // ✅ responsive
+              maxWidth: "280px", // ✅ limits size on large screens
+
+              padding: "10px 20px",
+              background: "#1E40AF",
+              color: "#ffffff",
+              border: "1px solid #EFF6FF",
+              borderRadius: "9px",
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: isLoggin ? "not-allowed" : "pointer",
+              opacity: isLoggin ? 0.8 : 1,
+            }}
+          >
+            {isLoggin ? (
+              <>
+                <span
+                  style={{
+                    width: "14px",
+                    height: "14px",
+                    border: "2px solid #ffffff",
+                    borderTop: "2px solid transparent",
+                    borderRadius: "50%",
+                    animation: "spin 0.8s linear infinite",
+                  }}
+                />
+                Logging in...
+              </>
+            ) : (
+              "Log In"
+            )}
+          </button>
+
           <div className="mb-25" />
         </div>
       </div>

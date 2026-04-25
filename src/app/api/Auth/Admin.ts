@@ -25,13 +25,21 @@ export interface MessageResponse {
   message: string;
 }
 
+export interface ApiResponse<T> {
+  data: T;
+}
+
 export const adminApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
 
-    getAllAdmins: builder.query<Admin[], void>({
-      query: () => "admin",
-      providesTags: ["Admin"],
-    }),
+ getAllAdmins: builder.query<Admin[], void>({
+  query: () => "admin",
+  transformResponse: (response: ApiResponse<Admin[]>) => {
+    console.log("🔍 Raw admins response:", response); //  remove after confirming
+    return Array.isArray(response) ? response : response?.data ?? [];
+  },
+  providesTags: ["Admin"],
+}),
 
     getAdminById: builder.query<Admin, number>({
       query: (id) => `admin/${id}`,

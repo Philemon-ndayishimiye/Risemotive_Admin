@@ -4,9 +4,11 @@ import {
   Globe,
   FileText,
   Palette,
-  Plus,
   Code,
   Scale,
+  CircleAlert,
+  Package,
+  Box,
   GraduationCap,
   UserPlus,
 } from "lucide-react";
@@ -87,19 +89,19 @@ export default function AdminLayout() {
           </li>
           <li>
             <NavLink to="/admin/order" className={navLinkClass}>
-              <GraduationCap size={15} />
+              <Package size={15} />
               <h1 className="text-[14.5px]">View Ordered Product</h1>
             </NavLink>
           </li>
           <li>
             <NavLink to="/admin/products" className={navLinkClass}>
-              <Plus size={15} />
+              <Box size={15} />
               <h1 className="text-[14.5px]">View Product</h1>
             </NavLink>
           </li>
           <li>
             <NavLink to="/admin/info" className={navLinkClass}>
-              <Plus size={15} />
+              <CircleAlert size={15} />
               <h1 className="text-[14.5px]">View Information</h1>
             </NavLink>
           </li>

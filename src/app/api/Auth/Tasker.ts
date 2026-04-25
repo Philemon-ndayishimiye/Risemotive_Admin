@@ -10,6 +10,7 @@ export interface Tasker {
   createdAt?: string;
   updatedAt?: string;
 }
+//type ApiResponse<T> = T | { data: T };
 
 export interface CreateTaskerRequest {
   name: string;
@@ -29,9 +30,12 @@ export interface MessageResponse {
 
 export const taskerApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
-
     getAllTaskers: builder.query<Tasker[], void>({
       query: () => "taskers",
+      transformResponse: (response: { total: number; items: Tasker[] }) => {
+        console.log("Raw taskers response:", response);
+        return response.items ?? [];
+      },
       providesTags: ["Tasker"],
     }),
 
@@ -71,12 +75,11 @@ export const taskerApi = apiSlice.injectEndpoints({
 
     toggleActivateTasker: builder.mutation<MessageResponse, number>({
       query: (id) => ({
-        url: `taskers/${id}/toggle-activate`,
+        url: `taskers/${id}/toggle-active`,
         method: "PATCH",
       }),
       invalidatesTags: ["Tasker"],
     }),
-
   }),
 });
 
