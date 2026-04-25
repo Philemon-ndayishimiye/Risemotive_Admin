@@ -6,7 +6,6 @@ import image4 from "../assets/RM INFOSPOT.jpg.jpeg";
 export default function Hero() {
   const navigate = useNavigate();
   const images = [image1, image2, image4];
-  const total = images.length;
 
   return (
     <>
