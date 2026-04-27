@@ -34,7 +34,7 @@ export default function AdminHeader() {
       console.log(error);
     }
     localStorage.removeItem("token");
-    navigate("/login");
+    navigate("/");
   };
 
   return (
