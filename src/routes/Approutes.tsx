@@ -14,8 +14,10 @@ import Notifications from "@/layouts/Admin/Notifications";
 import Settings from "@/layouts/Admin/Settings";
 import ProfilePage from "@/layouts/Admin/ProfilePage";
 import ViewProduct from "@/layouts/Admin/ViewProduct";
-import Information from "@/layouts/Admin/Information";
+//import Information from "@/layouts/Admin/Information";
 import Login from "@/pages/Login";
+import InfoPostAdmin from "@/layouts/Admin/Information";
+import SpotService from "@/layouts/Admin/SpotService";
 
 const AppRouter = () => {
   return (
@@ -40,7 +42,8 @@ const AppRouter = () => {
           <Route path="settings" element={<Settings />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="products" element={<ViewProduct />} />
-          <Route path="info" element={<Information />} />
+          <Route path="info" element={<InfoPostAdmin />} />
+          <Route path="spotservice" element={<SpotService />} />
         </Route>
       </Routes>
     </BrowserRouter>

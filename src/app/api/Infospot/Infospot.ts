@@ -1,16 +1,30 @@
 import { apiSlice } from "../../api/EntryApi";
 
+// ── Types ──────────────────────────────────────────────────────────────────
+
+export type InfoPostCategory =
+  | "JOB"
+  | "SCHOLARSHIP"
+  | "COMPETITION"
+  | "COMMUNITY"
+  | "ADVISORY"
+  | string;
+
 export interface InfoPost {
   id: number;
   title: string;
+  slug?: string;
   description: string;
-  category: string;
-  deadline: string;
-  location: string;
-  applyLink: string;
-  contactInfo: string;
+  category: InfoPostCategory;
+  deadline?: string;
+  location?: string;
+  applyLink?: string;
+  contactInfo?: string;
+  image?: string; // Cloudinary URL stored by the server
+  qualificationCriteria: string[];
   isActive: boolean;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface InfoPostsResponse {
@@ -18,28 +32,44 @@ export interface InfoPostsResponse {
   total: number;
 }
 
+// Used in the modal form state
 export interface CreateInfoPostRequest {
   title: string;
+  slug?: string;
   description: string;
-  category: "JOB" | "SCHOLARSHIP" | "OPPORTUNITY" | string;
-  deadline: string;
-  location: string;
-  applyLink: string;
-  contactInfo: string;
+  category: InfoPostCategory;
+  deadline?: string;
+  location?: string;
+  applyLink?: string;
+  image?: string;
+  contactInfo?: string;
+  qualificationCriteria: string[];
   isActive: boolean;
 }
 
-export interface UpdateInfoPostRequest extends Partial<CreateInfoPostRequest> {
+// UPDATE uses JSON body (tsoa controller) — image is a URL string
+export interface UpdateInfoPostRequest {
   id: number;
+  title?: string;
+  description?: string;
+  category?: InfoPostCategory;
+  deadline?: string;
+  location?: string;
+  applyLink?: string;
+  contactInfo?: string;
+  image?: string;
+  qualificationCriteria?: string[];
+  isActive?: boolean;
 }
 
 export interface MessageResponse {
   message: string;
 }
 
-export const infospotApi = apiSlice.injectEndpoints({
-  endpoints: (builder) => ({
+// ── API Slice ──────────────────────────────────────────────────────────────
 
+export const infoPostApi = apiSlice.injectEndpoints({
+  endpoints: (builder) => ({
     getAllInfoPosts: builder.query<InfoPostsResponse, void>({
       query: () => "info-posts",
       providesTags: ["InfoPost"],
@@ -50,20 +80,43 @@ export const infospotApi = apiSlice.injectEndpoints({
       providesTags: (_result, _error, id) => [{ type: "InfoPost", id }],
     }),
 
-    createInfoPost: builder.mutation<InfoPost, CreateInfoPostRequest>({
-      query: (data) => ({
-        url: "info-posts",
-        method: "POST",
-        body: data,
-      }),
+    // POST /info-posts — multipart FormData, server uploads image to Cloudinary
+
+    createInfoPost: builder.mutation<
+      InfoPost,
+      CreateInfoPostRequest & { imageFile?: File | null }
+    >({
+      query: ({ imageFile, ...body }) => {
+        if (imageFile) {
+          const formData = new FormData();
+          formData.append("image", imageFile);
+
+          Object.entries(body).forEach(([key, value]) => {
+            if (value === undefined || value === null) return;
+
+            if (key === "qualificationCriteria") {
+              formData.append("qualificationCriteria", JSON.stringify(value));
+            } else if (typeof value === "boolean") {
+              formData.append(key, value ? "true" : "false");
+            } else {
+              formData.append(key, String(value));
+            }
+          });
+
+          return { url: "info-posts", method: "POST", body: formData };
+        }
+
+        return { url: "info-posts", method: "POST", body };
+      },
       invalidatesTags: ["InfoPost"],
     }),
 
+    // PUT /info-posts/:id — plain JSON body (tsoa controller)
     updateInfoPost: builder.mutation<InfoPost, UpdateInfoPostRequest>({
-      query: ({ id, ...data }) => ({
+      query: ({ id, ...body }) => ({
         url: `info-posts/${id}`,
         method: "PUT",
-        body: data,
+        body,
       }),
       invalidatesTags: (_result, _error, { id }) => [
         { type: "InfoPost", id },
@@ -79,14 +132,17 @@ export const infospotApi = apiSlice.injectEndpoints({
       invalidatesTags: ["InfoPost"],
     }),
 
-    toggleActivateInfoPost: builder.mutation<MessageResponse, number>({
+    // PATCH /info-posts/:id/toggle-active  ← correct endpoint name
+    toggleActivateInfoPost: builder.mutation<InfoPost, number>({
       query: (id) => ({
-        url: `info-posts/${id}/toggle-activate`,
+        url: `info-posts/${id}/toggle-active`,
         method: "PATCH",
       }),
-      invalidatesTags: ["InfoPost"],
+      invalidatesTags: (_result, _error, id) => [
+        { type: "InfoPost", id },
+        "InfoPost",
+      ],
     }),
-
   }),
 });
 
@@ -97,4 +153,4 @@ export const {
   useUpdateInfoPostMutation,
   useDeleteInfoPostMutation,
   useToggleActivateInfoPostMutation,
-} = infospotApi;
+} = infoPostApi;

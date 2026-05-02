@@ -111,6 +111,13 @@ export default function AdminLayout() {
               <h1 className="text-[14.5px]">View Staff</h1>
             </NavLink>
           </li>
+
+          <li>
+            <NavLink to="/admin/spotservice" className={navLinkClass}>
+              <UserPlus size={15} />
+              <h1 className="text-[14.5px]">Spot Service</h1>
+            </NavLink>
+          </li>
         </ul>
       </div>
 

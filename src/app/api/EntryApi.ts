@@ -25,6 +25,11 @@ export const apiSlice = createApi({
     "Report",
     "Admin",
     "InfoPost",
+    "EGovernmentService",
+    "WebService",
+    "AppDocService",
+    "LegalService",
+    "CreativeMediaService",
   ],
   endpoints: () => ({}),
 });

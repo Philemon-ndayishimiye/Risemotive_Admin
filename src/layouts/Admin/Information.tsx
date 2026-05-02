@@ -11,15 +11,30 @@ import {
 import type {
   InfoPost,
   CreateInfoPostRequest,
+  UpdateInfoPostRequest,
 } from "../../app/api/Infospot/Infospot";
-import { Plus, X, ToggleLeft, ToggleRight } from "lucide-react";
+import {
+  Plus,
+  X,
+  ToggleLeft,
+  ToggleRight,
+  Trash2,
+  ImagePlus,
+  Link,
+} from "lucide-react";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-interface ApiError {
-  status: number;
-  data: { message?: string };
+function generateSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
 }
+
+// ── Badges ─────────────────────────────────────────────────────────────────
 
 function Badge({ active }: { active: boolean }) {
   return (
@@ -42,9 +57,9 @@ function CategoryBadge({ cat }: { cat: string }) {
   const map: Record<string, { bg: string; color: string }> = {
     JOB: { bg: "#DBEAFE", color: "#1E3A8A" },
     SCHOLARSHIP: { bg: "#FEF9C3", color: "#92400E" },
-    ADVISORY: { bg: "#DCFCE7", color: "#14532D" },
-    COMPETITION: { bg: "#ECFCE9", color: "#14525D" },
-    COMMUNITY: { bg: "#DCFCD4", color: "#145353" },
+    COMPETITION: { bg: "#FCE7F3", color: "#9D174D" },
+    COMMUNITY: { bg: "#DCFCE7", color: "#14532D" },
+    ADVISORY: { bg: "#EDE9FE", color: "#4C1D95" },
   };
   const s = map[cat] ?? { bg: "#F3F4F6", color: "#374151" };
   return (
@@ -63,50 +78,205 @@ function CategoryBadge({ cat }: { cat: string }) {
   );
 }
 
+// ── Shared styles ──────────────────────────────────────────────────────────
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "9px 12px",
+  borderRadius: "9px",
+  border: "1px solid #BFDBFE",
+  fontSize: "13px",
+  color: "#1E3A8A",
+  outline: "none",
+  boxSizing: "border-box",
+  background: "#fff",
+};
+
+const labelStyle: React.CSSProperties = {
+  fontSize: "12px",
+  fontWeight: 700,
+  color: "#374151",
+  display: "block",
+  marginBottom: "5px",
+};
+
+const fieldWrap: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+};
+
+const sectionStyle: React.CSSProperties = {
+  background: "#F8FAFF",
+  borderRadius: "12px",
+  padding: "16px",
+  border: "1px solid #DBEAFE",
+};
+
+const sectionTitle: React.CSSProperties = {
+  fontSize: "11px",
+  fontWeight: 700,
+  color: "#1E3A8A",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  margin: "0 0 12px",
+};
+
+// ── Form state ─────────────────────────────────────────────────────────────
+// CREATE mode: imageFile holds a File to upload via FormData
+// EDIT mode:   imageUrl holds the existing Cloudinary URL (no re-upload)
+
+interface InfoPostFormState extends CreateInfoPostRequest {
+  // used only in create mode — the actual File to send as multipart
+  imageFile?: File | null;
+  // used in both modes — current image URL (Cloudinary URL or empty)
+  imageUrl: string;
+}
+
 // ── Form Modal ─────────────────────────────────────────────────────────────
 
 function InfoPostModal({
+  mode,
   onClose,
-  onSave,
+  onCreate,
+  onUpdate,
   isLoading,
   initial,
 }: {
+  mode: "add" | "edit";
   onClose: () => void;
-  onSave: (data: CreateInfoPostRequest) => void;
+  onCreate: (
+    data: CreateInfoPostRequest & { imageFile?: File | null },
+  ) => Promise<void>;
+  onUpdate: (data: UpdateInfoPostRequest) => Promise<void>;
   isLoading: boolean;
   initial?: InfoPost;
 }) {
-  const [form, setForm] = useState<CreateInfoPostRequest>({
+  const [form, setForm] = useState<InfoPostFormState>({
     title: initial?.title ?? "",
+    slug: initial?.slug ?? "",
     description: initial?.description ?? "",
     category: initial?.category ?? "JOB",
     deadline: initial?.deadline ?? "",
     location: initial?.location ?? "",
     applyLink: initial?.applyLink ?? "",
     contactInfo: initial?.contactInfo ?? "",
+    qualificationCriteria: initial?.qualificationCriteria ?? [],
     isActive: initial?.isActive ?? true,
+    imageFile: null,
+    imageUrl: initial?.image ?? "",
   });
 
-  const set = (k: keyof CreateInfoPostRequest, v: string | boolean) =>
-    setForm((p) => ({ ...p, [k]: v }));
+  const [slugManual, setSlugManual] = useState(Boolean(initial?.slug));
+  // preview is always a displayable string
+  const [preview, setPreview] = useState<string>(initial?.image ?? "");
+  const [imageInputType, setImageInputType] = useState<"url" | "file">("url");
 
-  const inputStyle = {
-    width: "100%",
-    padding: "9px 12px",
-    borderRadius: "9px",
-    border: "1px solid #BFDBFE",
-    fontSize: "13px",
-    color: "#1E3A8A",
-    outline: "none",
-    boxSizing: "border-box" as const,
-    marginTop: "5px",
+  const set = <K extends keyof InfoPostFormState>(
+    key: K,
+    value: InfoPostFormState[K],
+  ) => setForm((p) => ({ ...p, [key]: value }));
+
+  const handleTitleChange = (val: string) => {
+    set("title", val);
+    if (!slugManual) set("slug", generateSlug(val));
   };
-  const labelStyle = {
-    fontSize: "13px",
-    fontWeight: 700,
-    color: "#374151",
-    display: "block",
+
+  // CREATE only: pick a file for multipart upload
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    set("imageFile", file);
+    setPreview(URL.createObjectURL(file));
   };
+
+  // EDIT or CREATE (URL mode): just store the URL string
+  const handleImageUrlChange = (val: string) => {
+    set("imageUrl", val);
+    set("imageFile", null);
+    setPreview(val);
+  };
+
+  const clearImage = () => {
+    set("imageUrl", "");
+    set("imageFile", null);
+    setPreview("");
+  };
+
+  const addCriteria = () =>
+    set("qualificationCriteria", [...form.qualificationCriteria, ""]);
+
+  const updateCriteria = (i: number, val: string) => {
+    const arr = [...form.qualificationCriteria];
+    arr[i] = val;
+    set("qualificationCriteria", arr);
+  };
+
+  const removeCriteria = (i: number) =>
+    set(
+      "qualificationCriteria",
+      form.qualificationCriteria.filter((_, idx) => idx !== i),
+    );
+
+  const validate = () => {
+    if (!form.title.trim()) {
+      alert("Title is required.");
+      return false;
+    }
+    if (!form.description.trim()) {
+      alert("Description is required.");
+      return false;
+    }
+    if (!form.deadline?.trim()) {
+      alert("Deadline is required.");
+      return false;
+    }
+    if (!form.location?.trim()) {
+      alert("Location is required.");
+      return false;
+    }
+    if (!form.contactInfo?.trim()) {
+      alert("Contact info is required.");
+      return false;
+    }
+    return true;
+  };
+  const handleSubmit = async () => {
+    if (!validate()) return;
+
+    if (mode === "add") {
+      await onCreate({
+        title: form.title,
+        slug: form.slug ?? generateSlug(form.title),
+        description: form.description,
+        category: form.category,
+        deadline: form.deadline,
+        location: form.location,
+        applyLink: form.applyLink,
+        contactInfo: form.contactInfo,
+        image: form.imageUrl,
+        imageFile: form.imageFile,
+        qualificationCriteria: form.qualificationCriteria,
+        isActive: form.isActive,
+      });
+    } else {
+      await onUpdate({
+        id: initial!.id,
+        title: form.title,
+        description: form.description,
+        category: form.category,
+        deadline: form.deadline,
+        location: form.location,
+        applyLink: form.applyLink,
+        contactInfo: form.contactInfo,
+        image: form.imageUrl || initial?.image,
+        qualificationCriteria: form.qualificationCriteria,
+        isActive: form.isActive,
+      });
+    }
+  };
+
+  // In edit mode the image section only shows URL input (no re-upload)
+  const isEditMode = mode === "edit";
 
   return (
     <div
@@ -117,155 +287,591 @@ function InfoPostModal({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "rgba(0,0,0,0.35)",
-        padding: "0 16px",
+        backgroundColor: "rgba(0,0,0,0.45)",
+        padding: "16px",
       }}
     >
       <div
         style={{
           width: "100%",
-          maxWidth: "540px",
+          maxWidth: "640px",
           backgroundColor: "#fff",
-          borderRadius: "16px",
+          borderRadius: "18px",
           overflow: "hidden",
           border: "1px solid #DBEAFE",
-          maxHeight: "90vh",
+          maxHeight: "92vh",
           display: "flex",
           flexDirection: "column",
+          boxShadow: "0 20px 60px rgba(30,58,138,0.2)",
         }}
       >
+        {/* ── Header ── */}
         <div
           style={{
             padding: "16px 20px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            backgroundColor: "#EFF6FF",
-            borderBottom: "1px solid #BFDBFE",
+            background: "#1E3A8A",
             flexShrink: 0,
           }}
         >
-          <span style={{ fontWeight: 700, fontSize: "15px", color: "#1E3A8A" }}>
-            {initial ? "Edit Info Post" : "Add Info Post"}
+          <span style={{ fontWeight: 700, fontSize: "15px", color: "#fff" }}>
+            {isEditMode ? "✏️ Edit Info Post" : "➕ New Info Post"}
           </span>
           <button
             onClick={onClose}
             style={{
-              width: "28px",
-              height: "28px",
+              width: "30px",
+              height: "30px",
               borderRadius: "50%",
-              border: "1px solid #DBEAFE",
-              background: "#fff",
+              border: "1px solid rgba(255,255,255,0.3)",
+              background: "rgba(255,255,255,0.1)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               cursor: "pointer",
             }}
           >
-            <X size={13} color="#6B7280" />
+            <X size={14} color="#fff" />
           </button>
         </div>
 
-        <div style={{ padding: "20px", overflowY: "auto", flex: 1 }}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "12px",
-              marginBottom: "12px",
-            }}
-          >
-            <div>
-              <label style={labelStyle}>Title</label>
-              <input
-                style={inputStyle}
-                value={form.title}
-                onChange={(e) => set("title", e.target.value)}
-                placeholder="Post title"
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Category</label>
-              <select
-                style={inputStyle}
-                value={form.category}
-                onChange={(e) => set("category", e.target.value)}
-              >
-                <option value="JOB">JOB</option>
-                <option value="COMPETITION">COMPETITION</option>
-                <option value="COMMUNITY">COMMUNITY</option>
-                <option value="SCHOLARSHIP">SCHOLARSHIP</option>
-                <option value="ADVISORY">ADVISORY</option>
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>Deadline</label>
-              <input
-                type="date"
-                style={inputStyle}
-                value={form.deadline}
-                onChange={(e) => set("deadline", e.target.value)}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Location</label>
-              <input
-                style={inputStyle}
-                value={form.location}
-                onChange={(e) => set("location", e.target.value)}
-                placeholder="Location"
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Apply Link</label>
-              <input
-                style={inputStyle}
-                value={form.applyLink}
-                onChange={(e) => set("applyLink", e.target.value)}
-                placeholder="https://..."
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Contact Info</label>
-              <input
-                style={inputStyle}
-                value={form.contactInfo}
-                onChange={(e) => set("contactInfo", e.target.value)}
-                placeholder="Email or phone"
-              />
+        {/* ── Scrollable body ── */}
+        <div
+          style={{
+            padding: "20px",
+            overflowY: "auto",
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            gap: "16px",
+          }}
+        >
+          {/* Basic Info */}
+          <div style={sectionStyle}>
+            <p style={sectionTitle}>Basic Information</p>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "12px",
+              }}
+            >
+              <div style={{ ...fieldWrap, gridColumn: "1 / -1" }}>
+                <label style={labelStyle}>Title *</label>
+                <input
+                  style={inputStyle}
+                  value={form.title}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  placeholder="e.g. Software Engineer at Kigali Tech"
+                />
+              </div>
+
+              <div style={{ ...fieldWrap, gridColumn: "1 / -1" }}>
+                <label style={labelStyle}>
+                  Slug
+                  <span
+                    style={{
+                      fontWeight: 400,
+                      color: "#9CA3AF",
+                      marginLeft: "6px",
+                    }}
+                  >
+                    (auto-generated from title)
+                  </span>
+                </label>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    alignItems: "center",
+                  }}
+                >
+                  <div style={{ position: "relative", flex: 1 }}>
+                    <Link
+                      size={13}
+                      color="#9CA3AF"
+                      style={{
+                        position: "absolute",
+                        left: "10px",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                      }}
+                    />
+                    <input
+                      style={{
+                        ...inputStyle,
+                        paddingLeft: "30px",
+                        background: slugManual ? "#fff" : "#F0F7FF",
+                        color: slugManual ? "#1E3A8A" : "#6B7280",
+                      }}
+                      value={form.slug ?? ""}
+                      onChange={(e) => {
+                        setSlugManual(true);
+                        set("slug", e.target.value);
+                      }}
+                      placeholder="auto-generated-slug"
+                    />
+                  </div>
+                  {slugManual && (
+                    <button
+                      onClick={() => {
+                        setSlugManual(false);
+                        set("slug", generateSlug(form.title));
+                      }}
+                      style={{
+                        padding: "8px 12px",
+                        borderRadius: "8px",
+                        border: "1px solid #DBEAFE",
+                        background: "#EFF6FF",
+                        color: "#1E3A8A",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      ↺ Auto
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div style={fieldWrap}>
+                <label style={labelStyle}>Category *</label>
+                <select
+                  style={inputStyle}
+                  value={form.category}
+                  onChange={(e) => set("category", e.target.value)}
+                >
+                  <option value="JOB">JOB</option>
+                  <option value="SCHOLARSHIP">SCHOLARSHIP</option>
+                  <option value="COMPETITION">COMPETITION</option>
+                  <option value="COMMUNITY">COMMUNITY</option>
+                  <option value="ADVISORY">ADVISORY</option>
+                </select>
+              </div>
+
+              <div style={fieldWrap}>
+                <label style={labelStyle}>Deadline *</label>
+                <input
+                  type="date"
+                  style={inputStyle}
+                  value={form.deadline ?? ""}
+                  onChange={(e) => set("deadline", e.target.value)}
+                />
+              </div>
+
+              <div style={fieldWrap}>
+                <label style={labelStyle}>Location *</label>
+                <input
+                  style={inputStyle}
+                  value={form.location ?? ""}
+                  onChange={(e) => set("location", e.target.value)}
+                  placeholder="e.g. Kigali, Rwanda"
+                />
+              </div>
+
+              <div style={fieldWrap}>
+                <label style={labelStyle}>Contact Info *</label>
+                <input
+                  style={inputStyle}
+                  value={form.contactInfo ?? ""}
+                  onChange={(e) => set("contactInfo", e.target.value)}
+                  placeholder="Email or phone"
+                />
+              </div>
+
+              <div style={{ ...fieldWrap, gridColumn: "1 / -1" }}>
+                <label style={labelStyle}>Apply Link</label>
+                <input
+                  style={inputStyle}
+                  value={form.applyLink ?? ""}
+                  onChange={(e) => set("applyLink", e.target.value)}
+                  placeholder="https://..."
+                />
+              </div>
             </div>
           </div>
-          <div style={{ marginBottom: "12px" }}>
-            <label style={labelStyle}>Description</label>
+
+          {/* Description */}
+          <div style={sectionStyle}>
+            <p style={sectionTitle}>Description *</p>
             <textarea
-              style={{ ...inputStyle, minHeight: "80px", resize: "vertical" }}
+              style={{ ...inputStyle, minHeight: "100px", resize: "vertical" }}
               value={form.description}
               onChange={(e) => set("description", e.target.value)}
-              placeholder="Describe this opportunity..."
+              placeholder="Describe this opportunity in detail..."
             />
           </div>
+
+          {/* Cover Image */}
+          <div style={sectionStyle}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "12px",
+              }}
+            >
+              <p style={{ ...sectionTitle, margin: 0 }}>Cover Image</p>
+              {/* File upload toggle only available on CREATE */}
+              {!isEditMode && (
+                <div style={{ display: "flex", gap: "6px" }}>
+                  {(["url", "file"] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => {
+                        setImageInputType(t);
+                        clearImage();
+                      }}
+                      style={{
+                        padding: "4px 12px",
+                        borderRadius: "6px",
+                        border: "1px solid #BFDBFE",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        background:
+                          imageInputType === t ? "#1E3A8A" : "#EFF6FF",
+                        color: imageInputType === t ? "#fff" : "#1E3A8A",
+                      }}
+                    >
+                      {t === "url" ? "🔗 Paste URL" : "📁 Upload File"}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* URL input — always shown in edit mode, shown in create URL mode */}
+            {(isEditMode || imageInputType === "url") && (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                {isEditMode && (
+                  <p
+                    style={{
+                      fontSize: "11px",
+                      color: "#9CA3AF",
+                      margin: "0 0 4px",
+                    }}
+                  >
+                    To change the image, paste a new URL below. Leave blank to
+                    keep the current image.
+                  </p>
+                )}
+                <input
+                  style={inputStyle}
+                  value={form.imageUrl}
+                  onChange={(e) => handleImageUrlChange(e.target.value)}
+                  placeholder="https://example.com/image.jpg"
+                />
+                {preview && (
+                  <div style={{ position: "relative" }}>
+                    <img
+                      src={preview}
+                      alt="preview"
+                      onError={() => setPreview("")}
+                      style={{
+                        width: "100%",
+                        maxHeight: "160px",
+                        objectFit: "cover",
+                        borderRadius: "10px",
+                        border: "1px solid #DBEAFE",
+                      }}
+                    />
+                    <button
+                      onClick={clearImage}
+                      style={{
+                        position: "absolute",
+                        top: "8px",
+                        right: "8px",
+                        background: "rgba(255,255,255,0.9)",
+                        border: "1px solid #FEE2E2",
+                        borderRadius: "6px",
+                        padding: "4px 8px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        color: "#EF4444",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                      }}
+                    >
+                      <Trash2 size={11} /> Remove
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* File upload — only in create mode */}
+            {!isEditMode && imageInputType === "file" && (
+              <div>
+                <label
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
+                    padding: "24px",
+                    border: "2px dashed #BFDBFE",
+                    borderRadius: "12px",
+                    cursor: "pointer",
+                    background: "#EFF6FF",
+                    position: "relative",
+                    overflow: "hidden",
+                  }}
+                >
+                  {preview ? (
+                    <>
+                      <img
+                        src={preview}
+                        alt="preview"
+                        style={{
+                          width: "100%",
+                          maxHeight: "150px",
+                          objectFit: "cover",
+                          borderRadius: "8px",
+                        }}
+                      />
+                      <span style={{ fontSize: "11px", color: "#6B7280" }}>
+                        Click to replace
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <ImagePlus size={30} color="#93C5FD" />
+                      <span
+                        style={{
+                          fontSize: "13px",
+                          color: "#6B7280",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Click to upload image
+                      </span>
+                      <span style={{ fontSize: "11px", color: "#9CA3AF" }}>
+                        PNG, JPG, WEBP
+                      </span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      opacity: 0,
+                      cursor: "pointer",
+                    }}
+                  />
+                </label>
+                {preview && (
+                  <button
+                    onClick={clearImage}
+                    style={{
+                      marginTop: "8px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      background: "none",
+                      border: "none",
+                      color: "#EF4444",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Trash2 size={12} /> Remove image
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Qualification Criteria */}
+          <div style={sectionStyle}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "12px",
+              }}
+            >
+              <p style={{ ...sectionTitle, margin: 0 }}>
+                Qualification Criteria
+              </p>
+              <button
+                onClick={addCriteria}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  padding: "6px 12px",
+                  borderRadius: "8px",
+                  border: "1px solid #BFDBFE",
+                  background: "#EFF6FF",
+                  color: "#1E3A8A",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                <Plus size={12} /> Add Criteria
+              </button>
+            </div>
+
+            {form.qualificationCriteria.length === 0 ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "20px",
+                  borderRadius: "10px",
+                  border: "1px dashed #BFDBFE",
+                  background: "#fff",
+                }}
+              >
+                <p style={{ fontSize: "12px", color: "#9CA3AF", margin: 0 }}>
+                  No criteria yet — click <strong>"Add Criteria"</strong> to add
+                  requirements.
+                </p>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                }}
+              >
+                {form.qualificationCriteria.map((c, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex",
+                      gap: "8px",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "12px",
+                        color: "#9CA3AF",
+                        minWidth: "20px",
+                        textAlign: "right",
+                        fontWeight: 700,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {i + 1}.
+                    </span>
+                    <input
+                      style={{ ...inputStyle, flex: 1 }}
+                      value={c}
+                      onChange={(e) => updateCriteria(i, e.target.value)}
+                      placeholder="e.g. Bachelor's degree in Computer Science"
+                    />
+                    <button
+                      onClick={() => removeCriteria(i)}
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "8px",
+                        border: "1px solid #FEE2E2",
+                        background: "#FFF5F5",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Trash2 size={13} color="#EF4444" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Status toggle */}
           <div
             style={{
+              ...sectionStyle,
               display: "flex",
               alignItems: "center",
-              gap: "10px",
-              marginBottom: "20px",
+              justifyContent: "space-between",
             }}
           >
-            <label style={labelStyle}>Active</label>
-            <input
-              type="checkbox"
-              checked={form.isActive}
-              onChange={(e) => set("isActive", e.target.checked)}
-              style={{ width: "16px", height: "16px", cursor: "pointer" }}
-            />
+            <div>
+              <p
+                style={{
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  color: "#374151",
+                  margin: 0,
+                }}
+              >
+                Publish immediately
+              </p>
+              <p
+                style={{
+                  fontSize: "11px",
+                  color: "#9CA3AF",
+                  margin: "2px 0 0",
+                }}
+              >
+                Post will be visible to users when active
+              </p>
+            </div>
+            <div
+              onClick={() => set("isActive", !form.isActive)}
+              style={{
+                width: "44px",
+                height: "24px",
+                borderRadius: "999px",
+                cursor: "pointer",
+                background: form.isActive ? "#1E3A8A" : "#D1D5DB",
+                position: "relative",
+                transition: "background 0.2s",
+                flexShrink: 0,
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  top: "3px",
+                  left: form.isActive ? "23px" : "3px",
+                  width: "18px",
+                  height: "18px",
+                  borderRadius: "50%",
+                  background: "#fff",
+                  transition: "left 0.2s",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                }}
+              />
+            </div>
           </div>
-          <div style={{ display: "flex", gap: "10px" }}>
+
+          {/* Footer */}
+          <div style={{ display: "flex", gap: "10px", paddingTop: "4px" }}>
             <button
               onClick={onClose}
               style={{
                 flex: 1,
-                padding: "10px",
+                padding: "11px",
                 borderRadius: "10px",
                 border: "1px solid #E5E7EB",
                 background: "#fff",
@@ -278,48 +884,25 @@ function InfoPostModal({
               Cancel
             </button>
             <button
-              onClick={() => {
-                if (!form.title.trim()) {
-                  alert("Title is required.");
-                  return;
-                }
-                if (!form.description.trim()) {
-                  alert("Description is required.");
-                  return;
-                }
-                if (!form.deadline.trim()) {
-                  alert("Deadline is required.");
-                  return;
-                }
-                if (!form.location.trim()) {
-                  alert("Location is required.");
-                  return;
-                }
-                if (!form.applyLink.trim()) {
-                  alert("Apply link is required.");
-                  return;
-                }
-                if (!form.contactInfo.trim()) {
-                  alert("Contact info is required.");
-                  return;
-                }
-                onSave(form);
-              }}
+              onClick={handleSubmit}
               disabled={isLoading}
               style={{
-                flex: 1,
-                padding: "10px",
+                flex: 2,
+                padding: "11px",
                 borderRadius: "10px",
                 border: "none",
-                background: "#1E3A8A",
+                background: isLoading ? "#93C5FD" : "#1E3A8A",
                 fontSize: "13px",
                 fontWeight: 700,
                 color: "#fff",
-                cursor: "pointer",
-                opacity: isLoading ? 0.6 : 1,
+                cursor: isLoading ? "not-allowed" : "pointer",
               }}
             >
-              {isLoading ? "Saving..." : initial ? "Update" : "Create"}
+              {isLoading
+                ? "Saving..."
+                : isEditMode
+                  ? "Update Post"
+                  : "Create Post"}
             </button>
           </div>
         </div>
@@ -344,22 +927,29 @@ export default function InfoPostAdmin() {
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
 
-  const handleCreate = async (form: CreateInfoPostRequest) => {
+  // ── Handlers ─────────────────────────────────────────────────────────────
+  interface ApiError {
+    status?: number;
+    data?: {
+      message?: string;
+    };
+  }
+
+  const handleCreate = async (
+    data: CreateInfoPostRequest & { imageFile?: File | null },
+  ) => {
     try {
-       console.log("📦 Sending payload:", JSON.stringify(form, null, 2));
-      await createPost(form).unwrap();
+      await createPost(data).unwrap();
       setShowModal(false);
     } catch (err: unknown) {
       const e = err as ApiError;
-      console.error(" Full error:", e);
-      console.log("error message:", e?.data?.message);
+      alert(e?.data?.message ?? "Failed to create post.");
     }
   };
 
-  const handleUpdate = async (form: CreateInfoPostRequest) => {
-    if (!editRow) return;
+  const handleUpdate = async (data: UpdateInfoPostRequest) => {
     try {
-      await updatePost({ id: editRow.id, ...form }).unwrap();
+      await updatePost(data).unwrap();
       setEditRow(null);
     } catch (err: unknown) {
       const e = err as ApiError;
@@ -384,8 +974,21 @@ export default function InfoPostAdmin() {
     }
   };
 
+  // ── Columns ───────────────────────────────────────────────────────────────
+
   const columns: Column<InfoPost>[] = [
-    { key: "title", label: "Title" },
+    {
+      key: "title",
+      label: "Title",
+      render: (row) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+          <span style={{ fontSize: "13px", fontWeight: 600, color: "#1E3A8A" }}>
+            {row.title}
+          </span>
+          <span style={{ fontSize: "11px", color: "#9CA3AF" }}>{row.slug}</span>
+        </div>
+      ),
+    },
     {
       key: "category",
       label: "Category",
@@ -395,25 +998,33 @@ export default function InfoPostAdmin() {
     { key: "deadline", label: "Deadline" },
     { key: "contactInfo", label: "Contact" },
     {
-      key: "applyLink",
-      label: "Apply Link",
+      key: "qualificationCriteria",
+      label: "Criteria",
+      render: (row) => (
+        <span style={{ fontSize: "12px", color: "#6B7280" }}>
+          {row.qualificationCriteria?.length ?? 0} item
+          {(row.qualificationCriteria?.length ?? 0) !== 1 ? "s" : ""}
+        </span>
+      ),
+    },
+    {
+      key: "image",
+      label: "Image",
       render: (row) =>
-        row.applyLink ? (
-          <a
-            href={row.applyLink}
-            target="_blank"
-            rel="noreferrer"
+        row.image ? (
+          <img
+            src={row.image}
+            alt={row.title}
             style={{
-              color: "#1E3A8A",
-              fontSize: "12px",
-              fontWeight: 600,
-              textDecoration: "underline",
+              width: "48px",
+              height: "36px",
+              objectFit: "cover",
+              borderRadius: "6px",
+              border: "1px solid #DBEAFE",
             }}
-          >
-            Open
-          </a>
+          />
         ) : (
-          <span style={{ color: "#9CA3AF" }}>—</span>
+          <span style={{ color: "#9CA3AF", fontSize: "12px" }}>—</span>
         ),
     },
     {
@@ -443,9 +1054,9 @@ export default function InfoPostAdmin() {
     },
     {
       key: "createdAt",
-      label: "Date Created",
+      label: "Created",
       render: (row) => (
-        <span style={{ fontSize: "13px", color: "#6B7280" }}>
+        <span style={{ fontSize: "12px", color: "#6B7280" }}>
           {row.createdAt
             ? new Date(row.createdAt).toLocaleDateString("en-US", {
                 year: "numeric",
@@ -457,6 +1068,8 @@ export default function InfoPostAdmin() {
       ),
     },
   ];
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="w-full min-w-0">
@@ -514,15 +1127,19 @@ export default function InfoPostAdmin() {
 
       {showModal && (
         <InfoPostModal
+          mode="add"
           onClose={() => setShowModal(false)}
-          onSave={handleCreate}
+          onCreate={handleCreate}
+          onUpdate={handleUpdate}
           isLoading={isCreating}
         />
       )}
       {editRow && (
         <InfoPostModal
+          mode="edit"
           onClose={() => setEditRow(null)}
-          onSave={handleUpdate}
+          onCreate={handleCreate}
+          onUpdate={handleUpdate}
           isLoading={isUpdating}
           initial={editRow}
         />

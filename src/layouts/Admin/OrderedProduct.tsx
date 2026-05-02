@@ -208,6 +208,7 @@ export default function OrderAdmin() {
       label: "Product",
       render: (row) => <ProductCell product={row.product} />,
     },
+    { key: "totalPrice", label: "totalPrice" },
     { key: "quantity", label: "Qty" },
     {
       key: "status",

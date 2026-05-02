@@ -243,6 +243,7 @@ export default function CreativeAdmin() {
     { key: "customerName", label: "Customer Name" },
     { key: "customerPhone", label: "Phone" },
     { key: "customerEmail", label: "Email" },
+    { key: "description", label: "description" },
     { key: "service", label: "Service" },
     { key: "tasker", label: "Tasker" },
     { key: "preferredDate", label: "Preferred Date" },
